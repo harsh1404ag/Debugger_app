@@ -1,0 +1,33 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/api/*"]
+  },
+  "routes": [
+    {
+      "route": "/app",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/dashboard",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/login",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/success",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/cancel",
+      "serve": "/index.html",
+      "statusCode": 200
+    }
+  ]
+}
