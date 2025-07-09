@@ -694,24 +694,5 @@ ${ragContext}
 }
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Database: ${dbPath}`);
-
-    // Log environment variables status (without exposing values)
-    console.log('Environment check:');
-    console.log('- AZURE_OPENAI_ENDPOINT:', process.env.AZURE_OPENAI_ENDPOINT ? 'Set' : 'Not set');
-    console.log('- AZURE_OPENAI_KEY:', process.env.AZURE_OPENAI_KEY ? 'Set' : 'Not set');
-    console.log('- AZURE_OPENAI_GPT4O_MINI_DEPLOYMENT_NAME:', process.env.AZURE_OPENAI_GPT4O_MINI_DEPLOYMENT_NAME ? 'Set' : 'Not set');
-    console.log('- AZURE_OPENAI_O3_MINI_DEPLOYMENT_NAME:', process.env.AZURE_OPENAI_O3_MINI_DEPLOYMENT_NAME ? 'Set' : 'Not set');
-    console.log('- AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME:', process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME ? 'Set' : 'Not set');
-    console.log('- AZURE_AI_SEARCH_ENDPOINT:', process.env.AZURE_AI_SEARCH_ENDPOINT ? 'Set' : 'Not set');
-    console.log('- AZURE_AI_SEARCH_KEY:', process.env.AZURE_AI_SEARCH_KEY ? 'Set' : 'Not set');
-    console.log('- AZURE_AI_SEARCH_INDEX_NAME:', process.env.AZURE_AI_SEARCH_INDEX_NAME ? 'Set' : 'Not set');
-    console.log('- STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? 'Set' : 'Not set');
-    console.log('- STRIPE_WEBHOOK_SECRET:', process.env.STRIPE_WEBHOOK_SECRET ? 'Set' : 'Not set');
-    console.log('- JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
-    console.log('- NODE_ENV:', process.env.NODE_ENV);
-});
 
 module.exports = app;
