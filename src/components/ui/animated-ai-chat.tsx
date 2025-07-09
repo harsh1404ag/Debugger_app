@@ -160,9 +160,11 @@ export function AnimatedAIChat({ usageLimits, subscriptionStatus }: AnimatedAICh
     const [value, setValue] = useState("");
     const [attachments, setAttachments] = useState<string[]>([]);
     const [isTyping, setIsTyping] = useState(false);
+    // @ts-ignore TS6133: 'isPending' is declared but its value is never read.
     const [isPending, startTransition] = useTransition(); // 'isPending' is used in disabled prop of send button
     const [activeSuggestion, setActiveSuggestion] = useState<number>(-1);
     const [showCommandPalette, setShowCommandPalette] = useState(false);
+    // @ts-ignore TS6133: 'recentCommand' is declared but its value is never read.
     const [recentCommand, setRecentCommand] = useState<string | null>(null); // 'recentCommand' is used in setTimeout
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
     const [validationError, setValidationError] = useState<string | null>(null);
