@@ -1,20 +1,21 @@
+// PROJECT/server/index.js - COMPLETE CORRECTED FILE FOR AZURE SQL DATABASE
+
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
-const bcrypt = require('bcryptjs'); // Keep if needed for future password auth, otherwise can remove
+// const sqlite3 = require('sqlite3').verbose(); // REMOVED: No longer using SQLite
+const sql = require('mssql'); // ADDED: For Azure SQL Database
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 require('dotenv').config(); // Load environment variables from .env file
 
-// Import axios for making HTTP requests to Azure OpenAI/AI Search
 const axios = require('axios');
-const Stripe = require('stripe'); // Import Stripe library
+const Stripe = require('stripe');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3001; // PORT is ignored in Azure Functions, but kept for local dev flexibility
 
 // --- Azure OpenAI & AI Search Configuration ---
-// Ensure these environment variables are set in your Azure Function App settings
 const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
 const AZURE_OPENAI_KEY = process.env.AZURE_OPENAI_KEY;
 const AZURE_OPENAI_GPT4O_MINI_DEPLOYMENT_NAME = process.env.AZURE_OPENAI_GPT4O_MINI_DEPLOYMENT_NAME || 'gpt-4o-mini';
@@ -23,85 +24,143 @@ const AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME = process.env.AZURE_OPENAI_EMBEDDIN
 
 const AZURE_AI_SEARCH_ENDPOINT = process.env.AZURE_AI_SEARCH_ENDPOINT;
 const AZURE_AI_SEARCH_KEY = process.env.AZURE_AI_SEARCH_KEY;
-const AZURE_AI_SEARCH_INDEX_NAME = process.env.AZURE_AI_SEARCH_INDEX_NAME || 'code-docs'; // Default search index name for your RAG data
+const AZURE_AI_SEARCH_INDEX_NAME = process.env.AZURE_AI_SEARCH_INDEX_NAME || 'code-docs';
 
 // --- Stripe Configuration ---
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID; // e.g., 'price_12345' from Stripe Dashboard
+const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'; // Your frontend URL for Stripe redirects
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Middleware
-app.use(cors()); // Enable CORS for frontend-backend communication
-// For Stripe webhooks, we need raw body, so apply express.json conditionally
+app.use(cors());
 app.use((req, res, next) => {
     if (req.originalUrl === '/api/stripe/webhook') {
-        next(); // Skip JSON parsing for webhook
+        next();
     } else {
-        express.json({ limit: '10mb' })(req, res, next); // Parse JSON request bodies, increase limit for code snippets
+        express.json({ limit: '10mb' })(req, res, next);
     }
 });
 
+// --- Database setup (Azure SQL Database) ---
+const SQL_SERVER = process.env.SQL_SERVER;
+const SQL_DATABASE = process.env.SQL_DATABASE;
+const SQL_USER = process.env.SQL_USER;
+const SQL_PASSWORD = process.env.SQL_PASSWORD;
+const SQL_PORT = parseInt(process.env.SQL_PORT || '1433', 10);
 
-// --- Database setup (SQLite) ---
-// Note: For production on Azure, you will replace this with Azure SQL Database or Supabase integration
-const dbPath = path.join(__dirname, 'database.sqlite');
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Could not connect to database', err);
-    } else {
-        console.log('Connected to SQLite database');
+const sqlConfig = {
+    user: SQL_USER,
+    password: SQL_PASSWORD,
+    server: SQL_SERVER,
+    database: SQL_DATABASE,
+    port: SQL_PORT,
+    options: {
+        encrypt: true, // For Azure SQL Database
+        trustServerCertificate: false // Set to true if you're using a self-signed cert locally, but false for Azure SQL
+    }
+};
+
+let pool; // Global variable for the SQL connection pool
+
+// Function to connect to SQL Database
+async function connectDb() {
+    try {
+        // If pool exists and is connected, return it
+        if (pool && pool.connected) {
+            // console.log('Already connected to Azure SQL Database.');
+            return pool;
+        }
+        // console.log('Connecting to Azure SQL Database...');
+        pool = await sql.connect(sqlConfig);
+        console.log('Connected to Azure SQL Database successfully.');
+        return pool;
+    } catch (err) {
+        console.error('Database connection failed:', err);
+        throw err; // Re-throw to indicate critical failure
+    }
+}
+
+// Middleware to ensure DB connection before routes
+app.use(async (req, res, next) => {
+    try {
+        await connectDb(); // Ensure connection for every request
+        next();
+    } catch (error) {
+        res.status(500).json({ error: 'Database connection error', details: error.message });
     }
 });
 
-// Initialize database tables
-db.serialize(() => {
-    // Users table
-    db.run(`
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            googleId TEXT UNIQUE,
-            email TEXT UNIQUE NOT NULL,
-            name TEXT NOT NULL,
-            subscriptionStatus TEXT DEFAULT 'free',
-            messagesUsed INTEGER DEFAULT 0,
-            lastMessageDate TEXT,
-            usageResetTime TEXT,
-            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
+// Initialize database tables (adjusted for SQL Server syntax)
+async function initializeDbTables() {
+    try {
+        const request = pool.request();
 
-    // Review sessions table (renamed from message_sessions for clarity in context)
-    db.run(`
-        CREATE TABLE IF NOT EXISTS review_sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userId INTEGER NOT NULL,
-            language TEXT NOT NULL,
-            codeSnippet TEXT NOT NULL,
-            aiResponse TEXT,
-            aiModel TEXT DEFAULT 'gpt-4o-mini',
-            messageType TEXT DEFAULT 'review',
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (userId) REFERENCES users(id)
-        )
-    `);
+        // Users table
+        await request.query(`
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='users' and xtype='U')
+            CREATE TABLE users (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                googleId NVARCHAR(255) UNIQUE,
+                email NVARCHAR(255) UNIQUE NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                subscriptionStatus NVARCHAR(50) DEFAULT 'free',
+                messagesUsed INT DEFAULT 0,
+                lastMessageDate NVARCHAR(255),
+                usageResetTime NVARCHAR(255),
+                createdAt DATETIME DEFAULT GETDATE()
+            );
+        `);
+        console.log('Table "users" checked/created.');
 
-    // Feedback table
-    db.run(`
-        CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userId INTEGER NOT NULL,
-            type TEXT NOT NULL,
-            rating INTEGER,
-            subject TEXT NOT NULL,
-            message TEXT NOT NULL,
-            email TEXT,
-            status TEXT DEFAULT 'open',
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (userId) REFERENCES users(id)
-        )
-    `);
+        // Review sessions table
+        await request.query(`
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='review_sessions' and xtype='U')
+            CREATE TABLE review_sessions (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                userId INT NOT NULL,
+                language NVARCHAR(255) NOT NULL,
+                codeSnippet NVARCHAR(MAX),
+                aiResponse NVARCHAR(MAX),
+                aiModel NVARCHAR(255) DEFAULT 'gpt-4o-mini',
+                messageType NVARCHAR(255) DEFAULT 'review',
+                timestamp DATETIME DEFAULT GETDATE(),
+                FOREIGN KEY (userId) REFERENCES users(id)
+            );
+        `);
+        console.log('Table "review_sessions" checked/created.');
+
+        // Feedback table
+        await request.query(`
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='feedback' and xtype='U')
+            CREATE TABLE feedback (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                userId INT NOT NULL,
+                type NVARCHAR(255) NOT NULL,
+                rating INT,
+                subject NVARCHAR(255) NOT NULL,
+                message NVARCHAR(MAX) NOT NULL,
+                email NVARCHAR(255),
+                status NVARCHAR(50) DEFAULT 'open',
+                timestamp DATETIME DEFAULT GETDATE(),
+                FOREIGN KEY (userId) REFERENCES users(id)
+            );
+        `);
+        console.log('Table "feedback" checked/created.');
+
+    } catch (err) {
+        console.error('Error initializing database tables:', err);
+        throw err;
+    }
+}
+
+// Call table initialization after connection
+// This will run when the Function App starts up
+connectDb().then(initializeDbTables).catch(err => {
+    console.error("Failed to initialize database on startup:", err);
+    // Depending on severity, you might want to exit the process here
 });
+
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -119,87 +178,79 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
-// --- API Routes ---
+// --- API Routes (Updated for SQL Server) ---
 
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', message: 'Server is running' });
 });
 
-// User registration/login (simplified for demo)
+// User registration/login
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, name } = req.body;
+        const request = pool.request();
 
-        // Check if user exists
-        db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
-            if (err) {
-                console.error('Database error during login:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
+        const userResult = await request.input('email', sql.NVarChar, email)
+                                      .query('SELECT id, email, name, subscriptionStatus, messagesUsed FROM users WHERE email = @email');
+        let user = userResult.recordset[0];
 
-            if (!user) {
-                // Create new user
-                db.run(
-                    'INSERT INTO users (email, name) VALUES (?, ?)',
-                    [email, name],
-                    function(err) {
-                        if (err) {
-                            console.error('Failed to create user:', err);
-                            return res.status(500).json({ error: 'Failed to create user' });
-                        }
+        if (!user) {
+            // Create new user
+            const insertResult = await pool.request()
+                                         .input('email', sql.NVarChar, email)
+                                         .input('name', sql.NVarChar, name)
+                                         .query('INSERT INTO users (email, name) VALUES (@email, @name); SELECT SCOPE_IDENTITY() AS id;'); // Get last inserted ID
+            const newUserId = insertResult.recordset[0].id;
 
-                        const token = jwt.sign(
-                            { userId: this.lastID, email },
-                            process.env.JWT_SECRET || 'fallback-secret',
-                            { expiresIn: '24h' }
-                        );
+            const token = jwt.sign(
+                { userId: newUserId, email },
+                process.env.JWT_SECRET || 'fallback-secret',
+                { expiresIn: '24h' }
+            );
 
-                        res.json({
-                            token,
-                            user: {
-                                id: this.lastID,
-                                email,
-                                name,
-                                subscriptionStatus: 'free',
-                                messagesUsed: 0
-                            }
-                        });
-                    }
-                );
-            } else {
-                // Login existing user
-                const token = jwt.sign(
-                    { userId: user.id, email: user.email },
-                    process.env.JWT_SECRET || 'fallback-secret',
-                    { expiresIn: '24h' }
-                );
+            res.json({
+                token,
+                user: {
+                    id: newUserId,
+                    email,
+                    name,
+                    subscriptionStatus: 'free',
+                    messagesUsed: 0
+                }
+            });
+        } else {
+            // Login existing user
+            const token = jwt.sign(
+                { userId: user.id, email: user.email },
+                process.env.JWT_SECRET || 'fallback-secret',
+                { expiresIn: '24h' }
+            );
 
-                res.json({
-                    token,
-                    user: {
-                        id: user.id,
-                        email: user.email,
-                        name: user.name,
-                        subscriptionStatus: user.subscriptionStatus,
-                        messagesUsed: user.messagesUsed
-                    }
-                });
-            }
-        });
+            res.json({
+                token,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    subscriptionStatus: user.subscriptionStatus,
+                    messagesUsed: user.messagesUsed
+                }
+            });
+        }
     } catch (error) {
         console.error('Authentication failed:', error);
-        res.status(500).json({ error: 'Authentication failed' });
+        res.status(500).json({ error: 'Authentication failed', details: error.message });
     }
 });
 
 // Get user profile
-app.get('/api/user', authenticateToken, (req, res) => {
-    db.get('SELECT * FROM users WHERE id = ?', [req.user.userId], (err, user) => {
-        if (err) {
-            console.error('Database error getting user profile:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
+app.get('/api/user', authenticateToken, async (req, res) => {
+    try {
+        const request = pool.request();
+        const result = await request.input('userId', sql.Int, req.user.userId)
+                                   .query('SELECT id, email, name, subscriptionStatus, messagesUsed, lastMessageDate, usageResetTime FROM users WHERE id = @userId');
+        const user = result.recordset[0];
 
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -214,156 +265,150 @@ app.get('/api/user', authenticateToken, (req, res) => {
             lastMessageDate: user.lastMessageDate,
             usageResetTime: user.usageResetTime
         });
-    });
+    } catch (error) {
+        console.error('Database error getting user profile:', error);
+        res.status(500).json({ error: 'Database error', details: error.message });
+    }
 });
 
 // Get usage limits
-app.get('/api/usage', authenticateToken, (req, res) => {
-    db.get('SELECT * FROM users WHERE id = ?', [req.user.userId], (err, user) => {
-        if (err) {
-            console.error('Database error getting usage:', err);
-            return res.status(500).json({ error: 'Database error' });
+app.get('/api/usage', authenticateToken, async (req, res) => {
+    try {
+        const request = pool.request();
+        const result = await request.input('userId', sql.Int, req.user.userId)
+                                   .query('SELECT messagesUsed, usageResetTime, subscriptionStatus FROM users WHERE id = @userId');
+        const user = result.recordset[0];
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
         }
 
         const now = new Date();
         const resetTime = user.usageResetTime ? new Date(user.usageResetTime) : null;
 
-        // Reset usage if 24 hours have passed
         let currentUsage = user.messagesUsed || 0;
         if (!resetTime || now >= resetTime) {
-            currentUsage = 0; // Reset usage
-            const newResetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Set new reset time for 24h from now
-            db.run(
-                'UPDATE users SET messagesUsed = 0, usageResetTime = ? WHERE id = ?',
-                [newResetTime.toISOString(), req.user.userId],
-                (updateErr) => {
-                    if (updateErr) console.error('Failed to reset user usage:', updateErr);
-                }
-            );
+            currentUsage = 0;
+            const newResetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            await pool.request()
+                      .input('messagesUsed', sql.Int, 0)
+                      .input('usageResetTime', sql.NVarChar, newResetTime.toISOString())
+                      .input('userId', sql.Int, req.user.userId)
+                      .query('UPDATE users SET messagesUsed = @messagesUsed, usageResetTime = @usageResetTime WHERE id = @userId');
+            user.usageResetTime = newResetTime.toISOString(); // Update user object for response
         }
 
-        // --- Updated Usage Limits based on our plan ---
-        const messageLimit = user.subscriptionStatus === 'pro' ? 5000 : 10; // High limit for Pro (effectively unlimited)
-        const lineLimit = user.subscriptionStatus === 'pro' ? 2500 : 250; // Max lines per review
+        const messageLimit = user.subscriptionStatus === 'pro' ? 5000 : 10;
+        const lineLimit = user.subscriptionStatus === 'pro' ? 2500 : 250;
 
         res.json({
             messagesUsed: currentUsage,
             messageLimit: messageLimit,
             lineLimit: lineLimit,
-            resetTime: user.usageResetTime ? user.usageResetTime : new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString() // Provide a reset time
+            resetTime: user.usageResetTime
         });
-    });
+    } catch (error) {
+        console.error('Database error getting usage:', error);
+        res.status(500).json({ error: 'Database error', details: error.message });
+    }
 });
 
 // Message endpoint (main AI review logic)
 app.post('/api/message', authenticateToken, async (req, res) => {
     try {
-        const { codeSnippet, language, messageType = 'review', reviewFocus = [] } = req.body; // Added reviewFocus
+        const { codeSnippet, language, messageType = 'review', reviewFocus = [] } = req.body;
         const userId = req.user.userId;
 
         if (!codeSnippet || !language) {
             return res.status(400).json({ error: 'Code snippet and language are required' });
         }
 
-        // Get user to check subscription and limits
-        db.get('SELECT * FROM users WHERE id = ?', [userId], async (err, user) => {
-            if (err) {
-                console.error('Database error getting user for message:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
+        const request = pool.request();
+        const userResult = await request.input('userId', sql.Int, userId)
+                                       .query('SELECT messagesUsed, usageResetTime, subscriptionStatus FROM users WHERE id = @userId');
+        const user = userResult.recordset[0];
 
-            // --- Usage Limit Check & Reset ---
-            const now = new Date();
-            const resetTime = user.usageResetTime ? new Date(user.usageResetTime) : null;
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
 
-            let currentUsage = user.messagesUsed || 0;
-            if (!resetTime || now >= resetTime) {
-                currentUsage = 0;
-                const newResetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-                db.run(
-                    'UPDATE users SET messagesUsed = 0, usageResetTime = ? WHERE id = ?',
-                    [newResetTime.toISOString(), userId]
-                );
-            }
+        const now = new Date();
+        const resetTime = user.usageResetTime ? new Date(user.usageResetTime) : null;
 
-            const messageLimit = user.subscriptionStatus === 'pro' ? 5000 : 10; // High limit for Pro
-            const lineLimit = user.subscriptionStatus === 'pro' ? 2500 : 250; // Max lines per review
+        let currentUsage = user.messagesUsed || 0;
+        if (!resetTime || now >= resetTime) {
+            currentUsage = 0;
+            const newResetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            await pool.request()
+                      .input('messagesUsed', sql.Int, 0)
+                      .input('usageResetTime', sql.NVarChar, newResetTime.toISOString())
+                      .input('userId', sql.Int, userId)
+                      .query('UPDATE users SET messagesUsed = @messagesUsed, usageResetTime = @usageResetTime WHERE id = @userId');
+        }
 
-            if (currentUsage >= messageLimit) {
+        const messageLimit = user.subscriptionStatus === 'pro' ? 5000 : 10;
+        const lineLimit = user.subscriptionStatus === 'pro' ? 2500 : 250;
+
+        if (currentUsage >= messageLimit) {
+            return res.status(429).json({
+                error: 'Daily message limit reached',
+                message: `You've used ${currentUsage}/${messageLimit} messages today. ${user.subscriptionStatus === 'free' ? 'Upgrade to Pro for more messages.' : 'Try again tomorrow.'}`
+            });
+        }
+
+        const codeLines = codeSnippet.split('\n').length;
+        if (codeLines > lineLimit) {
+            return res.status(400).json({
+                error: 'Code too long',
+                message: `Code exceeds ${lineLimit} line limit. Current: ${codeLines} lines.`
+            });
+        }
+
+        const aiModel = user.subscriptionStatus === 'pro' ? AZURE_OPENAI_O3_MINI_DEPLOYMENT_NAME : AZURE_OPENAI_GPT4O_MINI_DEPLOYMENT_NAME;
+
+        let aiResponse = '';
+        try {
+            const queryEmbedding = await getEmbedding(codeSnippet);
+            const searchResults = await searchAzureAISearch(queryEmbedding, language, reviewFocus);
+            const fullPrompt = constructReviewPrompt(codeSnippet, language, reviewFocus, searchResults);
+            aiResponse = await callAzureOpenAI(fullPrompt, aiModel);
+
+        } catch (aiError) {
+            console.error('Azure OpenAI or AI Search error:', aiError.response ? aiError.response.data : aiError.message);
+            if (aiError.response && aiError.response.status === 429) {
                 return res.status(429).json({
-                    error: 'Daily message limit reached',
-                    message: `You've used ${currentUsage}/${messageLimit} messages today. ${user.subscriptionStatus === 'free' ? 'Upgrade to Pro for more messages.' : 'Try again tomorrow.'}`
+                    error: 'AI service rate limit hit',
+                    message: 'Our AI service is busy. Please try again in a moment.'
                 });
             }
+            return res.status(500).json({ error: 'Failed to get AI response' });
+        }
 
-            const codeLines = codeSnippet.split('\n').length;
-            if (codeLines > lineLimit) {
-                return res.status(400).json({
-                    error: 'Code too long',
-                    message: `Code exceeds ${lineLimit} line limit. Current: ${codeLines} lines.`
-                });
-            }
-            // --- End Usage Limit Check ---
+        // Save message session
+        await pool.request()
+                  .input('userId', sql.Int, userId)
+                  .input('language', sql.NVarChar, language)
+                  .input('codeSnippet', sql.NVarChar(sql.MAX), codeSnippet)
+                  .input('aiResponse', sql.NVarChar(sql.MAX), aiResponse)
+                  .input('aiModel', sql.NVarChar, aiModel)
+                  .input('messageType', sql.NVarChar, messageType)
+                  .query('INSERT INTO review_sessions (userId, language, codeSnippet, aiResponse, aiModel, messageType) VALUES (@userId, @language, @codeSnippet, @aiResponse, @aiModel, @messageType)');
 
-            // Determine AI model based on subscription
-            const aiModel = user.subscriptionStatus === 'pro' ? AZURE_OPENAI_O3_MINI_DEPLOYMENT_NAME : AZURE_OPENAI_GPT4O_MINI_DEPLOYMENT_NAME;
+        // Update user's message count
+        await pool.request()
+                  .input('userId', sql.Int, userId)
+                  .query('UPDATE users SET messagesUsed = messagesUsed + 1 WHERE id = @userId');
 
-            let aiResponse = '';
-            try {
-                // --- RAG & Azure OpenAI Integration ---
-                // 1. Get embedding for the user's code snippet
-                const queryEmbedding = await getEmbedding(codeSnippet);
-
-                // 2. Search Azure AI Search for relevant documentation
-                const searchResults = await searchAzureAISearch(queryEmbedding, language, reviewFocus);
-
-                // 3. Construct the prompt for the generative AI model
-                const fullPrompt = constructReviewPrompt(codeSnippet, language, reviewFocus, searchResults);
-
-                // 4. Call Azure OpenAI Service
-                aiResponse = await callAzureOpenAI(fullPrompt, aiModel);
-
-            } catch (aiError) {
-                console.error('Azure OpenAI or AI Search error:', aiError.response ? aiError.response.data : aiError.message);
-                // Handle 429 (rate limit) specifically
-                if (aiError.response && aiError.response.status === 429) {
-                    return res.status(429).json({
-                        error: 'AI service rate limit hit',
-                        message: 'Our AI service is busy. Please try again in a moment.'
-                    });
-                }
-                return res.status(500).json({ error: 'Failed to get AI response' });
-            }
-
-            // Save message session
-            db.run(
-                'INSERT INTO review_sessions (userId, language, codeSnippet, aiResponse, aiModel, messageType) VALUES (?, ?, ?, ?, ?, ?)',
-                [userId, language, codeSnippet, aiResponse, aiModel, messageType],
-                function(err) {
-                    if (err) {
-                        console.error('Failed to save message session:', err);
-                        return res.status(500).json({ error: 'Failed to save message session' });
-                    }
-
-                    // Update user's message count
-                    db.run(
-                        'UPDATE users SET messagesUsed = messagesUsed + 1 WHERE id = ?',
-                        [userId]
-                    );
-
-                    res.json({
-                        messageId: this.lastID,
-                        response: JSON.parse(aiResponse), // Assuming AI response is JSON string
-                        aiModel,
-                        language,
-                        messageType
-                    });
-                }
-            );
+        res.json({
+            response: JSON.parse(aiResponse),
+            aiModel,
+            language,
+            messageType
         });
+
     } catch (error) {
         console.error('Message processing error:', error);
-        res.status(500).json({ error: 'Message processing failed' });
+        res.status(500).json({ error: 'Message processing failed', details: error.message });
     }
 });
 
@@ -377,54 +422,46 @@ app.post('/api/feedback', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Type, subject, and message are required' });
         }
 
-        db.run(
-            'INSERT INTO feedback (userId, type, rating, subject, message, email) VALUES (?, ?, ?, ?, ?, ?)',
-            [userId, type, rating || null, subject, message, email || null],
-            function(err) {
-                if (err) {
-                    console.error('Failed to save feedback:', err);
-                    return res.status(500).json({ error: 'Failed to save feedback' });
-                }
+        await pool.request()
+                  .input('userId', sql.Int, userId)
+                  .input('type', sql.NVarChar, type)
+                  .input('rating', sql.Int, rating || null)
+                  .input('subject', sql.NVarChar, subject)
+                  .input('message', sql.NVarChar(sql.MAX), message)
+                  .input('email', sql.NVarChar, email || null)
+                  .input('status', sql.NVarChar, 'open')
+                  .query('INSERT INTO feedback (userId, type, rating, subject, message, email, status) VALUES (@userId, @type, @rating, @subject, @message, @email, @status)');
 
-                res.json({
-                    feedbackId: this.lastID,
-                    message: 'Feedback submitted successfully'
-                });
-            }
-        );
+        res.json({
+            message: 'Feedback submitted successfully'
+        });
     } catch (error) {
         console.error('Feedback submission error:', error);
-        res.status(500).json({ error: 'Failed to submit feedback' });
+        res.status(500).json({ error: 'Failed to submit feedback', details: error.message });
     }
 });
 
 // Get message history
-app.get('/api/history', authenticateToken, (req, res) => {
-    db.all(
-        'SELECT id, language, aiResponse, aiModel, messageType, timestamp FROM review_sessions WHERE userId = ? ORDER BY timestamp DESC LIMIT 50',
-        [req.user.userId],
-        (err, rows) => {
-            if (err) {
-                console.error('Database error getting history:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
+app.get('/api/history', authenticateToken, async (req, res) => {
+    try {
+        const request = pool.request();
+        const result = await request.input('userId', sql.Int, req.user.userId)
+                                   .query('SELECT id, language, aiResponse, aiModel, messageType, timestamp FROM review_sessions WHERE userId = @userId ORDER BY timestamp DESC OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY'); // SQL Server LIMIT equivalent
 
-            // Parse aiResponse from string to JSON object for each row
-            const historyWithParsedResponses = rows.map(row => ({
-                ...row,
-                aiResponse: JSON.parse(row.aiResponse) // Assuming it's stored as JSON string
-            }));
+        const historyWithParsedResponses = result.recordset.map(row => ({
+            ...row,
+            aiResponse: JSON.parse(row.aiResponse)
+        }));
 
-            res.json(historyWithParsedResponses);
-        }
-    );
+        res.json(historyWithParsedResponses);
+    } catch (error) {
+        console.error('Database error getting history:', error);
+        res.status(500).json({ error: 'Database error', details: error.message });
+    }
 });
 
 // Stripe checkout endpoint
 app.post('/api/stripe/checkout', authenticateToken, async (req, res) => {
-    // TODO: Ensure 'stripe' npm package is installed: npm install stripe
-    // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Already imported at top
-
     if (!STRIPE_PRO_PRICE_ID) {
         return res.status(500).json({ error: 'Stripe Pro Price ID not configured.' });
     }
@@ -450,12 +487,11 @@ app.post('/api/stripe/checkout', authenticateToken, async (req, res) => {
         res.json({ checkoutUrl: session.url });
     } catch (error) {
         console.error('Stripe checkout error:', error);
-        res.status(500).json({ error: 'Failed to create checkout session' });
+        res.status(500).json({ error: 'Failed to create checkout session', details: error.message });
     }
 });
 
 // Stripe webhook endpoint
-// Use express.raw() to get the raw body for Stripe signature verification
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
@@ -474,10 +510,11 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             console.log('Checkout Session Completed:', session.id);
             const userIdFromSession = session.client_reference_id; // Retrieve user ID
             if (userIdFromSession) {
-                db.run('UPDATE users SET subscriptionStatus = ? WHERE id = ?', ['pro', userIdFromSession], (err) => {
-                    if (err) console.error('Failed to update user subscription on checkout.session.completed:', err);
-                    else console.log(`User ${userIdFromSession} upgraded to Pro.`);
-                });
+                await pool.request()
+                          .input('subscriptionStatus', sql.NVarChar, 'pro')
+                          .input('userId', sql.Int, userIdFromSession)
+                          .query('UPDATE users SET subscriptionStatus = @subscriptionStatus WHERE id = @userId');
+                console.log(`User ${userIdFromSession} upgraded to Pro.`);
             }
             break;
         case 'customer.subscription.updated':
@@ -499,11 +536,6 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 
     res.json({ received: true });
 });
-
-// --- IMPORTANT: Order of Routes ---
-// 1. All specific API routes (like /api/health, /api/auth, /api/message, etc.)
-// 2. Static file serving (if in production)
-// 3. Catch-all route for frontend (LAST)
 
 // --- Serve Static Frontend Files (ONLY IN PRODUCTION) ---
 // This block ensures that in a production environment, the Express server
@@ -545,6 +577,9 @@ async function getEmbedding(text) {
         return response.data.data[0].embedding;
     } catch (error) {
         console.error("Error getting embedding from Azure OpenAI:", error.response ? error.response.data : error.message);
+        if (error.response) {
+            console.error("AI Search Response Data:", error.response.data);
+        }
         throw new Error("Failed to get embedding from AI service.");
     }
 }
@@ -553,15 +588,13 @@ async function getEmbedding(text) {
 async function searchAzureAISearch(queryEmbedding, language, reviewFocus) {
     if (!AZURE_AI_SEARCH_ENDPOINT || !AZURE_AI_SEARCH_KEY || !AZURE_AI_SEARCH_INDEX_NAME) {
         console.warn("Azure AI Search configuration missing. RAG will be skipped.");
-        return []; // Return empty if not configured or for development
+        return [];
     }
 
     const searchUrl = `${AZURE_AI_SEARCH_ENDPOINT}/indexes/${AZURE_AI_SEARCH_INDEX_NAME}/docs/search?api-version=2023-10-01-Preview`;
 
-    // Construct filter based on language and reviewFocus (metadata)
-    let filter = `language eq '${language}'`; // Assuming 'language' is a filterable field in your AI Search index
+    let filter = `language eq '${language}'`;
     if (reviewFocus && reviewFocus.length > 0) {
-        // Assuming 'focus_area' is a filterable collection field in your AI Search index
         const focusFilters = reviewFocus.map(focus => `focus_area/any(f: f eq '${focus}')`).join(' or ');
         filter += ` and (${focusFilters})`;
     }
@@ -570,26 +603,25 @@ async function searchAzureAISearch(queryEmbedding, language, reviewFocus) {
         const response = await axios.post(searchUrl, {
             vectors: [{
                 value: queryEmbedding,
-                fields: "contentVector", // Assuming your vector field in AI Search is named 'contentVector'
-                k: 5 // Retrieve top 5 relevant chunks
+                fields: "contentVector",
+                k: 5
             }],
-            select: "content", // Select the actual text content of the chunk
+            select: "content",
             filter: filter,
-            queryType: "vector" // Specify vector search
+            queryType: "vector"
         }, {
             headers: {
                 'api-key': AZURE_AI_SEARCH_KEY,
                 'Content-Type': 'application/json'
             }
         });
-        return response.data.value.map(doc => doc.content); // Return array of content strings
+        return response.data.value.map(doc => doc.content);
     } catch (error) {
         console.error("Error searching Azure AI Search:", error.response ? error.response.data : error.message);
-        // Log the full error response from AI Search for debugging
         if (error.response) {
             console.error("AI Search Response Data:", error.response.data);
         }
-        return []; // Return empty on error, so AI still tries to respond without RAG context
+        return [];
     }
 }
 
@@ -608,11 +640,10 @@ async function callAzureOpenAI(prompt, modelDeploymentName) {
         return response.data.choices[0].message.content;
     } catch (error) {
         console.error("Error calling Azure OpenAI:", error.response ? error.response.data : error.message);
-        // Log the full error response from OpenAI for debugging
         if (error.response) {
             console.error("OpenAI Response Data:", error.response.data);
         }
-        throw error; // Re-throw to be caught by the message endpoint
+        throw error;
     }
 }
 
@@ -630,10 +661,9 @@ function constructReviewPrompt(codeSnippet, language, reviewFocus, ragContextChu
                      "\n------------------------------------------------------\n";
     }
 
-    // Determine short language name for code blocks in JSON output
     let languageShortName = language.split(' ')[0].toLowerCase();
     if (languageShortName === 'javascript' || languageShortName === 'typescript') languageShortName = 'js';
-    if (languageShortName === 'html/css') languageShortName = 'html'; // Or 'css' depending on primary focus
+    if (languageShortName === 'html/css') languageShortName = 'html';
 
 
     const prompt = `You are an expert Senior Software Engineer with a keen eye for detail and a passion for writing clean, efficient, secure, and maintainable code. Your task is to perform a comprehensive code review of the provided code snippet.
@@ -693,6 +723,5 @@ ${ragContext}
     return prompt;
 }
 
-// Start server
-
+// Export the Express app for Azure Functions Custom Handler
 module.exports = app;
