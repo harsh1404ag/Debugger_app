@@ -14,22 +14,20 @@ import {
   FileText, 
   Clock,
   CheckCircle,
-  Star,
-  Upload,
-  Download,
   Menu,
   X,
   CreditCard,
   MessageSquare,
   HelpCircle
-} from 'lucide-react';
+} 
+from 'lucide-react';
 
 interface DashboardProps {
   user: any;
   onLogout: () => void;
 }
 
-export default function Dashboard({ user, onLogout }: DashboardProps) {
+export default function Dashboard({ onLogout }: DashboardProps) {
   const [activeView, setActiveView] = useState('review');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);

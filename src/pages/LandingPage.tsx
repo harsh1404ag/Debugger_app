@@ -3,10 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BGPattern } from '../components/ui/bg-pattern';
 import { 
   Code, 
-  Shield, 
-  Zap, 
+  Shield,  
   CheckCircle, 
-  Star, 
   ChevronDown,
   ArrowRight,
   Github,
@@ -16,10 +14,8 @@ import {
   Users,
   Target,
   FileText,
-  Lock,
   Sparkles,
   Play,
-  Layers,
   Cpu,
   Globe
 } from 'lucide-react';
@@ -446,7 +442,6 @@ export default function LandingPage() {
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold mb-4 text-white">Pro</h3>
                 <div className="text-5xl font-bold mb-4 text-white">$15<span className="text-lg text-gray-400">/month</span></div>
-                <div className="text-3xl font-bold mb-4 text-white">$15<span className="text-lg text-gray-400">/month</span></div>
                 <p className="text-gray-400">For serious developers</p>
               </div>
               
