@@ -17,8 +17,7 @@ import {
   Sparkles,
   Play,
   Cpu,
-  Globe
-} from 'lucide-react';
+  Globe} from 'lucide-react';
 
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
