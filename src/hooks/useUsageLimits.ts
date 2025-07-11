@@ -94,16 +94,17 @@ export function useUsageLimits(user: User | null): UsageLimits {
                     const currentMessagesLimit = user.subscriptionStatus === 'pro' ? PRO_MESSAGE_LIMIT : FREE_MESSAGE_LIMIT;
                     const currentLinesPerMessage = user.subscriptionStatus === 'pro' ? PRO_LINE_LIMIT : FREE_LINE_LIMIT;
 
-                    setUsage({
-                        messagesUsed: data.messagesUsed || 0,
-                        messagesLimit: currentMessagesLimit,
-                        linesPerMessage: currentLinesPerMessage,
-                        resetTime: data.resetTime || '',
-                        canSendMessage: (data.messagesUsed || 0) < currentMessagesLimit, // Ensure canSendMessage is accurate
-                        timeUntilReset: calculateTimeUntilReset(data.resetTime),
-                        incrementUsage: incrementUsage, // Assign the function
-                        validateCodeLength: validateCodeLength // Assign the function
-                    });
+                    // src/hooks/useUsageLimits.ts (snippet)
+setUsage({
+    messagesUsed: data.messagesUsed || 0,
+    messagesLimit: currentMessagesLimit,
+    linesPerMessage: currentLinesPerMessage,
+    resetTime: data.resetTime || '',
+    canSendMessage: (data.messagesUsed || 0) < currentMessagesLimit, // <--- THIS LINE IS CRUCIAL
+    timeUntilReset: calculateTimeUntilReset(data.resetTime),
+    incrementUsage: incrementUsage,
+    validateCodeLength: validateCodeLength
+});
                 } else {
                     console.error('Failed to fetch usage: ', response.status, response.statusText);
                     // Potentially set canSendMessage to false or show an error state
