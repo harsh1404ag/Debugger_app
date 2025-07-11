@@ -1,1 +1,5 @@
-"rolesSource": "DEFAULT"
+{
+  "auth": {
+    "rolesSource": "DEFAULT"
+  }
+}
