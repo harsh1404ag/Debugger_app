@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 interface UsageLimits {
     messagesUsed: number;
     messagesLimit: number;
+    lineLimit: number;
     linesPerMessage: number;
     resetTime: string;
     canSendMessage: boolean;
