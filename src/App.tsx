@@ -30,7 +30,7 @@ function App() {
             path="/app" 
             element={
               isAuthenticated ? (
-                <Dashboard user={user} onLogout={handleLogout} />
+                <Dashboard />
               ) : (
                 <GoogleAuth onSuccess={handleAuthSuccess} />
               )
