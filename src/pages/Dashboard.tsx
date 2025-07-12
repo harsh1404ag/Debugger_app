@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate, Outlet } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { Sidebar } from "@/components/sidebar"
+import { Sidebar } from "@/components/Sidebar"
 import { LogOut } from "lucide-react"
 import { logout } from "@/lib/utils"
 
