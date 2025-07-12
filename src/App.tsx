@@ -1,20 +1,19 @@
-// src/App.tsx (Example - adjust based on your actual code)
-import { useState, useEffect } from 'react';
+// src/App.tsx - Corrected
+import { useState, useEffect } from 'react'; // Keep useState, useEffect might be used by useAuth or useUsageLimits
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { GoogleOAuthProvider } from '@react-oauth/google';
+import { GoogleOAuthProvider } from '@react-oauth/google'; // This import is correct
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
-import AuthCallback from './components/AuthCallback';
-import { useAuth } from './hooks/useAuth'; // Assuming you have useAuth
-import { useUsageLimits } from './hooks/useUsageLimits'; // Assuming you have useUsageLimits
+import AuthCallback from './components/AuthCallback'; // This import is correct if file exists
+import { useAuth } from './hooks/useAuth'; // This import is correct if file exists
+import { useUsageLimits } from './hooks/useUsageLimits'; // This import is correct if file exists
 
 function App() {
-  const { user, logout } = useAuth(); // Assuming useAuth provides user and logout
+  const { user, logout } = useAuth();
   const { messagesUsed, messagesLimit, lineLimit, resetTime, canSendMessage, incrementUsage, validateCodeLength } = useUsageLimits();
 
-  // Ensure handleLogout is used by passing it down
   const handleLogout = () => {
-    logout(); // Call the logout function from useAuth
+    logout();
   };
 
   return (
@@ -25,10 +24,10 @@ function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/app/*" element={user ? (
             <Dashboard
-              onLogout={handleLogout} // Pass handleLogout to Dashboard (or Sidebar within Dashboard)
+              onLogout={handleLogout}
               messagesUsed={messagesUsed}
               messagesLimit={messagesLimit}
-              lineLimit={lineLimit}
+              lineLimit={lineLimit} // Pass lineLimit
               resetTime={resetTime}
               canSendMessage={canSendMessage}
               incrementUsage={incrementUsage}
