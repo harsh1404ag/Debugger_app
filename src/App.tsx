@@ -1,46 +1,47 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState } from 'react';
-import { GoogleAuth } from './components/ui/google-auth';
+// src/App.tsx - Corrected
+import { useState, useEffect } from 'react'; // Keep useState, useEffect might be used by useAuth or useUsageLimits
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google'; // This import is correct
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
-import './App.css';
+import AuthCallback from './components/AuthCallback'; // This import is correct if file exists
+import { useAuth } from './hooks/useAuth'; // This import is correct if file exists
+import { useUsageLimits } from './hooks/useUsageLimits'; // This import is correct if file exists
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-
-  const handleAuthSuccess = (userData: any) => {
-    setUser(userData);
-    setIsAuthenticated(true);
-  };
+  const { user, logout } = useAuth();
+  const { messagesUsed, messagesLimit, lineLimit, resetTime, canSendMessage, incrementUsage, validateCodeLength } = useUsageLimits();
 
   const handleLogout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
-    // Clear token and navigate to landing page
-    localStorage.removeItem('token');
+    logout();
   };
 
   return (
-    <Router>
-      <div className="min-h-screen w-full bg-black">
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
+      <Router>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route 
-            path="/app" 
-            element={
-              isAuthenticated ? (
-                <Dashboard user={user} onLogout={handleLogout} />
-              ) : (
-                <GoogleAuth onSuccess={handleAuthSuccess} />
-              )
-            } 
-          />
-          {/* Catch all route - redirect to landing page */}
-          <Route path="*" element={<LandingPage />} />
+          <Route path="/" element={user ? <Navigate to="/app" /> : <LandingPage />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/app/*" element={user ? (
+            <Dashboard
+              onLogout={handleLogout}
+              messagesUsed={messagesUsed}
+              messagesLimit={messagesLimit}
+              lineLimit={lineLimit} // Pass lineLimit
+              resetTime={resetTime}
+              canSendMessage={canSendMessage}
+              incrementUsage={incrementUsage}
+              validateCodeLength={validateCodeLength}
+            />
+          ) : (
+            <Navigate to="/" />
+          )} />
+          {/* Add routes for success/cancel pages if not already there */}
+          <Route path="/success" element={<div>Payment Success!</div>} />
+          <Route path="/cancel" element={<div>Payment Cancelled.</div>} />
         </Routes>
-      </div>
-    </Router>
+      </Router>
+    </GoogleOAuthProvider>
   );
 }
 
