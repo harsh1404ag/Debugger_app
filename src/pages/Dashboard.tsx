@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate, Outlet } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { Sidebar } from "@/components/Sidebar"
+import Sidebar from "@/components/Sidebar" // ✅ Corrected default import
 import { LogOut } from "lucide-react"
 import { logout } from "@/lib/utils"
 
@@ -27,6 +27,7 @@ export default function Dashboard() {
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         items={sidebarItems}
+        onLogout={onLogout} // ✅ Added to match the Sidebar API
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
@@ -43,7 +44,12 @@ export default function Dashboard() {
               viewBox="0 0 24 24"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
             </svg>
           </Button>
 
