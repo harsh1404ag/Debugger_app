@@ -1,19 +1,21 @@
-// src/components/ui/Sidebar.tsx
-import React, { Dispatch, SetStateAction } from 'react'; // Ensure React and Dispatch/SetStateAction are imported
-import { X, Menu, Settings, History, MessageSquare, CreditCard } from 'lucide-react'; // Removed CheckCircle if unused
-// Ensure you import all icons actually used in your Sidebar.tsx
+// src/components/ui/Sidebar.tsx - Corrected
+import React, { Dispatch, SetStateAction } from 'react';
+// Import ONLY the icons you actually use in the Sidebar's JSX,
+// or if they are passed in the 'items' array as components.
+// Based on the example I provided, X and Settings are used directly.
+import { X, Settings, MessageSquare, History, CreditCard } from 'lucide-react'; // Keep only used icons
 
 // Define the interface for Sidebar's props
 interface SidebarProps {
     sidebarOpen: boolean;
     setSidebarOpen: Dispatch<SetStateAction<boolean>>;
-    items: { name: string; href: string; icon: React.ElementType; }[]; // Use React.ElementType for icon prop
-    onLogout: () => void; // Add onLogout prop
+    // items will contain the actual Lucide React components, not just strings
+    items: { name: string; href: string; icon: React.ElementType; }[];
+    onLogout: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, items, onLogout }) => {
     return (
-        // Your existing Sidebar JSX
         <div className={`fixed inset-y-0 left-0 z-50 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out w-64 bg-gray-800 text-white p-4 md:relative md:translate-x-0 md:flex md:flex-col`}>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">CodeReview AI</h2>
