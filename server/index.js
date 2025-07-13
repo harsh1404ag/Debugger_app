@@ -33,11 +33,18 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Middleware
-app.use(cors());
+// CORRECTED CORS CONFIGURATION: Explicitly allow frontend origin and credentials
+app.use(cors({
+  origin: FRONTEND_URL, // Use the FRONTEND_URL from .env or default to http://localhost:5173
+  credentials: true // Allow cookies/auth headers to be sent
+}));
+
 app.use((req, res, next) => {
+    // This specific middleware is for Stripe webhooks, which need raw body
     if (req.originalUrl === '/api/stripe/webhook') {
         next();
     } else {
+        // For all other routes, parse JSON body
         express.json({ limit: '10mb' })(req, res, next);
     }
 });
@@ -48,6 +55,15 @@ const SQL_DATABASE = process.env.SQL_DATABASE;
 const SQL_USER = process.env.SQL_USER;
 const SQL_PASSWORD = process.env.SQL_PASSWORD;
 const SQL_PORT = parseInt(process.env.SQL_PORT || '1433', 10);
+
+// --- ADDED: SQL Connection Debug Info ---
+console.log('--- SQL Connection Debug Info ---');
+console.log('SQL_SERVER:', SQL_SERVER);
+console.log('SQL_DATABASE:', SQL_DATABASE);
+console.log('SQL_USER:', SQL_USER);
+console.log('SQL_PASSWORD:', SQL_PASSWORD ? 'Password is SET' : 'Password is NOT SET'); // DO NOT LOG THE ACTUAL PASSWORD
+console.log('SQL_PORT:', SQL_PORT);
+console.log('--- End SQL Connection Debug Info ---');
 
 const sqlConfig = {
     user: SQL_USER,
@@ -188,29 +204,52 @@ app.get('/api/health', (req, res) => {
 // User registration/login
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const { email, name } = req.body;
+        // The Google ID token is sent in the 'token' field of the request body
+        const { token: googleIdToken } = req.body;
+
+        if (!googleIdToken) {
+            return res.status(400).json({ error: 'Google ID token is required' });
+        }
+
+        // Verify the Google ID token and get user info
+        // For local development, we're decoding it directly.
+        // For production, you should send this ID token to Google's verification endpoint:
+        // https://oauth2.googleapis.com/tokeninfo?id_token=YOUR_ID_TOKEN
+        // and verify the response.
+        const decodedGoogleToken = jwt.decode(googleIdToken); // REMOVED: ': any' type annotation
+        if (!decodedGoogleToken || !decodedGoogleToken.email) {
+            return res.status(401).json({ error: 'Invalid Google ID token' });
+        }
+
+        const email = decodedGoogleToken.email;
+        const name = decodedGoogleToken.name || decodedGoogleToken.email; // Use name from token, fallback to email
+        const googleId = decodedGoogleToken.sub; // Google's unique user ID
+
         const request = pool.request();
 
-        const userResult = await request.input('email', sql.NVarChar, email)
-                                      .query('SELECT id, email, name, subscriptionStatus, messagesUsed FROM users WHERE email = @email');
+        // Check if user exists by googleId or email
+        let userResult = await request.input('googleId', sql.NVarChar, googleId)
+                                     .input('email', sql.NVarChar, email)
+                                     .query('SELECT id, email, name, subscriptionStatus, messagesUsed FROM users WHERE googleId = @googleId OR email = @email');
         let user = userResult.recordset[0];
 
         if (!user) {
-            // Create new user
+            // Create new user if not found
             const insertResult = await pool.request()
+                                         .input('googleId', sql.NVarChar, googleId)
                                          .input('email', sql.NVarChar, email)
                                          .input('name', sql.NVarChar, name)
-                                         .query('INSERT INTO users (email, name) VALUES (@email, @name); SELECT SCOPE_IDENTITY() AS id;'); // Get last inserted ID
+                                         .query('INSERT INTO users (googleId, email, name) VALUES (@googleId, @email, @name); SELECT SCOPE_IDENTITY() AS id;');
             const newUserId = insertResult.recordset[0].id;
 
-            const token = jwt.sign(
-                { userId: newUserId, email },
+            const appToken = jwt.sign(
+                { userId: newUserId, email: email, name: name }, // Include name in JWT
                 process.env.JWT_SECRET || 'fallback-secret',
                 { expiresIn: '24h' }
             );
 
             res.json({
-                token,
+                token: appToken,
                 user: {
                     id: newUserId,
                     email,
@@ -221,14 +260,23 @@ app.post('/api/auth/login', async (req, res) => {
             });
         } else {
             // Login existing user
-            const token = jwt.sign(
-                { userId: user.id, email: user.email },
+            // Ensure googleId is updated if user previously logged in via email/password
+            if (!user.googleId && googleId) {
+                await pool.request()
+                          .input('googleId', sql.NVarChar, googleId)
+                          .input('id', sql.Int, user.id)
+                          .query('UPDATE users SET googleId = @googleId WHERE id = @id');
+                user.googleId = googleId; // Update local user object
+            }
+
+            const appToken = jwt.sign(
+                { userId: user.id, email: user.email, name: user.name }, // Include name in JWT
                 process.env.JWT_SECRET || 'fallback-secret',
                 { expiresIn: '24h' }
             );
 
             res.json({
-                token,
+                token: appToken,
                 user: {
                     id: user.id,
                     email: user.email,
@@ -325,7 +373,7 @@ app.post('/api/message', authenticateToken, async (req, res) => {
 
         const request = pool.request();
         const userResult = await request.input('userId', sql.Int, userId)
-                                       .query('SELECT messagesUsed, usageResetTime, subscriptionStatus FROM users WHERE id = @userId');
+                                         .query('SELECT messagesUsed, usageResetTime, subscriptionStatus FROM users WHERE id = @userId');
         const user = userResult.recordset[0];
 
         if (!user) {
@@ -386,18 +434,18 @@ app.post('/api/message', authenticateToken, async (req, res) => {
 
         // Save message session
         await pool.request()
-                  .input('userId', sql.Int, userId)
-                  .input('language', sql.NVarChar, language)
-                  .input('codeSnippet', sql.NVarChar(sql.MAX), codeSnippet)
-                  .input('aiResponse', sql.NVarChar(sql.MAX), aiResponse)
-                  .input('aiModel', sql.NVarChar, aiModel)
-                  .input('messageType', sql.NVarChar, messageType)
-                  .query('INSERT INTO review_sessions (userId, language, codeSnippet, aiResponse, aiModel, messageType) VALUES (@userId, @language, @codeSnippet, @aiResponse, @aiModel, @messageType)');
+                    .input('userId', sql.Int, userId)
+                    .input('language', sql.NVarChar, language)
+                    .input('codeSnippet', sql.NVarChar(sql.MAX), codeSnippet)
+                    .input('aiResponse', sql.NVarChar(sql.MAX), aiResponse)
+                    .input('aiModel', sql.NVarChar, aiModel)
+                    .input('messageType', sql.NVarChar, messageType)
+                    .query('INSERT INTO review_sessions (userId, language, codeSnippet, aiResponse, aiModel, messageType) VALUES (@userId, @language, @codeSnippet, @aiResponse, @aiModel, @messageType)');
 
         // Update user's message count
         await pool.request()
-                  .input('userId', sql.Int, userId)
-                  .query('UPDATE users SET messagesUsed = messagesUsed + 1 WHERE id = @userId');
+                    .input('userId', sql.Int, userId)
+                    .query('UPDATE users SET messagesUsed = messagesUsed + 1 WHERE id = @userId');
 
         res.json({
             response: JSON.parse(aiResponse),
@@ -423,14 +471,14 @@ app.post('/api/feedback', authenticateToken, async (req, res) => {
         }
 
         await pool.request()
-                  .input('userId', sql.Int, userId)
-                  .input('type', sql.NVarChar, type)
-                  .input('rating', sql.Int, rating || null)
-                  .input('subject', sql.NVarChar, subject)
-                  .input('message', sql.NVarChar(sql.MAX), message)
-                  .input('email', sql.NVarChar, email || null)
-                  .input('status', sql.NVarChar, 'open')
-                  .query('INSERT INTO feedback (userId, type, rating, subject, message, email, status) VALUES (@userId, @type, @rating, @subject, @message, @email, @status)');
+                    .input('userId', sql.Int, userId)
+                    .input('type', sql.NVarChar, type)
+                    .input('rating', sql.Int, rating || null)
+                    .input('subject', sql.NVarChar, subject)
+                    .input('message', sql.NVarChar(sql.MAX), message)
+                    .input('email', sql.NVarChar, email || null)
+                    .input('status', sql.NVarChar, 'open')
+                    .query('INSERT INTO feedback (userId, type, rating, subject, message, email, status) VALUES (@userId, @type, @rating, @subject, @message, @email, @status)');
 
         res.json({
             message: 'Feedback submitted successfully'
@@ -511,9 +559,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             const userIdFromSession = session.client_reference_id; // Retrieve user ID
             if (userIdFromSession) {
                 await pool.request()
-                          .input('subscriptionStatus', sql.NVarChar, 'pro')
-                          .input('userId', sql.Int, userIdFromSession)
-                          .query('UPDATE users SET subscriptionStatus = @subscriptionStatus WHERE id = @userId');
+                            .input('subscriptionStatus', sql.NVarChar, 'pro')
+                            .input('userId', sql.Int, userIdFromSession)
+                            .query('UPDATE users SET subscriptionStatus = @subscriptionStatus WHERE id = @userId');
                 console.log(`User ${userIdFromSession} upgraded to Pro.`);
             }
             break;

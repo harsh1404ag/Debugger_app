@@ -1,15 +1,10 @@
-// src/components/ui/Sidebar.tsx - Corrected
+// src/components/ui/Sidebar.tsx
 import React, { Dispatch, SetStateAction } from 'react';
-// Import ONLY the icons you actually use in the Sidebar's JSX,
-// or if they are passed in the 'items' array as components.
-// Based on the example I provided, X and Settings are used directly.
-import { X, Settings, MessageSquare, History, CreditCard } from 'lucide-react'; // Keep only used icons
+import { X, Settings } from 'lucide-react'; // Keep only X and Settings if used directly
 
-// Define the interface for Sidebar's props
 interface SidebarProps {
     sidebarOpen: boolean;
     setSidebarOpen: Dispatch<SetStateAction<boolean>>;
-    // items will contain the actual Lucide React components, not just strings
     items: { name: string; href: string; icon: React.ElementType; }[];
     onLogout: () => void;
 }
@@ -28,7 +23,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen, items, o
                     {items.map((item) => (
                         <li key={item.name} className="mb-2">
                             <a href={item.href} className="flex items-center p-2 rounded-md hover:bg-gray-700">
-                                <item.icon className="h-5 w-5 mr-3" /> {/* Render icon component */}
+                                <item.icon className="h-5 w-5 mr-3" />
                                 {item.name}
                             </a>
                         </li>

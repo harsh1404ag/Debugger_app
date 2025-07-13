@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BGPattern } from '../components/ui/bg-pattern';
-import { 
-  Code, 
-  Shield,  
-  CheckCircle, 
+import {
+  Code,
+  Shield,
+  CheckCircle,
   ChevronDown,
   ArrowRight,
   Github,
@@ -17,11 +17,15 @@ import {
   Sparkles,
   Play,
   Cpu,
-  Globe} from 'lucide-react';
+  Globe
+} from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google'; // Import GoogleLogin
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth hook
 
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const { handleGoogleLogin } = useAuth(); // Get the handleGoogleLogin function from useAuth
 
   const benefits = [
     {
@@ -79,29 +83,29 @@ export default function LandingPage() {
       {/* Enhanced Background with BGPattern */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {/* Primary grid pattern */}
-        <BGPattern 
-          variant="grid" 
-          mask="fade-edges" 
-          size={40} 
-          fill="rgba(139, 92, 246, 0.08)" 
+        <BGPattern
+          variant="grid"
+          mask="fade-edges"
+          size={40}
+          fill="rgba(139, 92, 246, 0.08)"
           className="opacity-60"
         />
-        
+
         {/* Secondary dots pattern */}
-        <BGPattern 
-          variant="dots" 
-          mask="fade-center" 
-          size={60} 
-          fill="rgba(99, 102, 241, 0.06)" 
+        <BGPattern
+          variant="dots"
+          mask="fade-center"
+          size={60}
+          fill="rgba(99, 102, 241, 0.06)"
           className="opacity-40"
         />
-        
+
         {/* Diagonal stripes for texture */}
-        <BGPattern 
-          variant="diagonal-stripes" 
-          mask="fade-y" 
-          size={80} 
-          fill="rgba(168, 85, 247, 0.03)" 
+        <BGPattern
+          variant="diagonal-stripes"
+          mask="fade-y"
+          size={80}
+          fill="rgba(168, 85, 247, 0.03)"
           className="opacity-30"
         />
 
@@ -109,32 +113,32 @@ export default function LandingPage() {
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-500/20 rounded-full filter blur-[128px] animate-pulse" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/20 rounded-full filter blur-[128px] animate-pulse delay-700" />
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-fuchsia-500/15 rounded-full filter blur-[96px] animate-pulse delay-1000" />
-        
+
         {/* Geometric elements */}
         <div className="absolute top-20 right-20 w-32 h-32 border border-violet-500/20 rounded-lg rotate-45 animate-pulse delay-500" />
         <div className="absolute bottom-40 left-20 w-24 h-24 border border-indigo-500/20 rounded-full animate-pulse delay-1500" />
         <div className="absolute top-1/3 right-1/3 w-16 h-16 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 rounded-lg rotate-12 animate-pulse delay-2000" />
-        
+
         {/* Additional floating elements */}
-        <motion.div 
+        <motion.div
           className="absolute top-1/4 left-1/6 w-8 h-8 bg-violet-400/30 rounded-full"
-          animate={{ 
+          animate={{
             y: [0, -20, 0],
             opacity: [0.3, 0.8, 0.3]
           }}
-          transition={{ 
+          transition={{
             duration: 4,
             repeat: Infinity,
             ease: "easeInOut"
           }}
         />
-        <motion.div 
+        <motion.div
           className="absolute bottom-1/4 right-1/6 w-6 h-6 bg-indigo-400/30 rounded-full"
-          animate={{ 
+          animate={{
             y: [0, 15, 0],
             opacity: [0.2, 0.7, 0.2]
           }}
-          transition={{ 
+          transition={{
             duration: 3,
             repeat: Infinity,
             ease: "easeInOut",
@@ -146,7 +150,7 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="relative z-10 px-6 py-4 border-b border-white/5 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <motion.div 
+          <motion.div
             className="flex items-center space-x-3"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -159,7 +163,7 @@ export default function LandingPage() {
               CodeReview AI
             </span>
           </motion.div>
-          
+
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -167,7 +171,7 @@ export default function LandingPage() {
             className="flex items-center gap-4"
           >
             <a
-              href="#pricing" 
+              href="#pricing"
               onClick={(e) => {
                 e.preventDefault();
                 document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
@@ -198,7 +202,7 @@ export default function LandingPage() {
               <Sparkles className="w-4 h-4 text-violet-400" />
               <span className="text-sm text-gray-300">Powered by Advanced AI</span>
             </div>
-            
+
             <h1 className="text-6xl lg:text-8xl font-bold mb-8 leading-tight">
               <span className="bg-gradient-to-r from-white via-white to-gray-300 bg-clip-text text-transparent">
                 Instant Code
@@ -209,17 +213,17 @@ export default function LandingPage() {
               </span>
             </h1>
           </motion.div>
-          
-          <motion.p 
+
+          <motion.p
             className="text-xl lg:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
-            Get expert-level feedback on your code in seconds. Leverage AI-powered insights 
+            Get expert-level feedback on your code in seconds. Leverage AI-powered insights
             and best practices from millions of code reviews to write better code, faster.
           </motion.p>
-          
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -241,7 +245,7 @@ export default function LandingPage() {
                 <ArrowRight className="w-5 h-5 text-black" />
               </motion.div>
             </a>
-            
+
             <div className="flex items-center gap-3 text-gray-400">
               <div className="flex -space-x-2">
                 {[1, 2, 3].map((i) => (
@@ -252,12 +256,35 @@ export default function LandingPage() {
             </div>
           </motion.div>
 
+          {/* Google Login Button - ADDED HERE */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="flex justify-center mt-8" // Added flex and justify-center for centering
+          >
+            <GoogleLogin
+              onSuccess={credentialResponse => {
+                console.log("Google Login Success:", credentialResponse);
+                if (credentialResponse.credential) {
+                  handleGoogleLogin(credentialResponse.credential);
+                } else {
+                  console.error("No credential found in Google response.");
+                }
+              }}
+              onError={() => {
+                console.error('Google Login Failed');
+              }}
+              useOneTap // Enable Google One Tap for a seamless experience
+            />
+          </motion.div>
+
           {/* Stats */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.6 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-2xl mx-auto"
+            className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-2xl mx-auto mt-16" // Adjusted margin-top
           >
             {[
               { icon: <Users className="w-6 h-6" />, value: "10K+", label: "Developers" },
@@ -291,7 +318,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-gray-400 text-xl">Three simple steps to better code</p>
           </motion.div>
-          
+
           <div className="grid md:grid-cols-3 gap-8">
             {[
               {
@@ -301,7 +328,7 @@ export default function LandingPage() {
                 icon: <FileText className="w-8 h-8" />
               },
               {
-                step: "02", 
+                step: "02",
                 title: "Get Instant Feedback",
                 description: "Our AI analyzes your code for bugs, performance issues, security vulnerabilities, and best practices",
                 icon: <Cpu className="w-8 h-8" />
@@ -350,7 +377,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-gray-400 text-xl">Powerful features that make you a better developer</p>
           </motion.div>
-          
+
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {benefits.map((benefit, index) => (
               <motion.div
@@ -387,7 +414,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-gray-400 text-xl">Start free, upgrade when you need more</p>
           </motion.div>
-          
+
           <div className="grid md:grid-cols-2 gap-8">
             {/* Free Plan */}
             <motion.div
@@ -402,11 +429,11 @@ export default function LandingPage() {
                 <div className="text-5xl font-bold mb-4 text-white">$0<span className="text-lg text-gray-400">/month</span></div>
                 <p className="text-gray-400">Perfect for getting started</p>
               </div>
-              
+
               <ul className="space-y-4 mb-8">
                 {[
                   "10 messages per day",
-                  "Max 250 lines per message", 
+                  "Max 250 lines per message",
                   "Basic review focus",
                   "Standard AI model",
                   "Community support"
@@ -417,7 +444,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              
+
               <a
                 href="/app"
                 className="w-full py-4 px-6 bg-white/10 hover:bg-white/20 rounded-xl text-center font-semibold transition-all duration-200 block text-white border border-white/20"
@@ -437,13 +464,13 @@ export default function LandingPage() {
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-violet-500 to-indigo-500 text-white px-6 py-2 rounded-xl text-sm font-semibold">
                 Most Popular
               </div>
-              
+
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold mb-4 text-white">Pro</h3>
                 <div className="text-5xl font-bold mb-4 text-white">$15<span className="text-lg text-gray-400">/month</span></div>
                 <p className="text-gray-400">For serious developers</p>
               </div>
-              
+
               <ul className="space-y-4 mb-8">
                 {[
                   "50 messages per day",
@@ -460,7 +487,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              
+
               <button className="w-full py-4 px-6 bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 rounded-xl text-center font-semibold transition-all duration-200 text-white shadow-lg shadow-violet-500/25">
                 Choose Pro Plan
               </button>
@@ -484,7 +511,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-gray-400 text-xl">Everything you need to know</p>
           </motion.div>
-          
+
           <div className="space-y-4">
             {faqs.map((faq, index) => (
               <motion.div
@@ -543,7 +570,7 @@ export default function LandingPage() {
                 Making code reviews instant and intelligent for developers worldwide.
               </p>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-6 text-white">Product</h4>
               <ul className="space-y-3 text-sm text-gray-400">
@@ -556,7 +583,7 @@ export default function LandingPage() {
                 <li><a href="#" className="hover:text-white transition-colors">Documentation</a></li>
               </ul>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-6 text-white">Company</h4>
               <ul className="space-y-3 text-sm text-gray-400">
@@ -566,7 +593,7 @@ export default function LandingPage() {
                 <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
               </ul>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-6 text-white">Legal</h4>
               <ul className="space-y-3 text-sm text-gray-400">
@@ -576,7 +603,7 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
-          
+
           <div className="border-t border-white/10 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between">
             <p className="text-gray-400 text-sm">
               © 2024 CodeReview AI. All rights reserved.

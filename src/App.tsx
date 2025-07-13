@@ -1,48 +1,70 @@
-// src/App.tsx - Corrected
-import { useState, useEffect } from 'react'; // Keep useState, useEffect might be used by useAuth or useUsageLimits
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { GoogleOAuthProvider } from '@react-oauth/google'; // This import is correct
-import LandingPage from './pages/LandingPage';
-import Dashboard from './pages/Dashboard';
-import AuthCallback from './components/AuthCallback'; // This import is correct if file exists
-import { useAuth } from './hooks/useAuth'; // This import is correct if file exists
-import { useUsageLimits } from './hooks/useUsageLimits'; // This import is correct if file exists
+    import { useState, useEffect } from 'react';
+    import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+    import { GoogleOAuthProvider } from '@react-oauth/google';
+    import LandingPage from './pages/LandingPage';
+    import Dashboard from './pages/Dashboard';
+    import AuthCallback from './components/ui/AuthCallback';
+    import { useAuth } from './hooks/useAuth';
+    import { useUsageLimits } from './hooks/useUsageLimits';
 
-function App() {
-  const { user, logout } = useAuth();
-  const { messagesUsed, messagesLimit, lineLimit, resetTime, canSendMessage, incrementUsage, validateCodeLength } = useUsageLimits();
+    // Define the Google Client ID here, ensuring it's picked up
+    // This needs to be outside the component for Vite to properly inject it
+    const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-  const handleLogout = () => {
-    logout();
-  };
+    function App() {
+      const { user, loading, logout } = useAuth();
+      const { messagesUsed, messageLimit, lineLimit, resetTime, canSendMessage, incrementUsage, validateCodeLength } = useUsageLimits();
 
-  return (
-    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
-      <Router>
-        <Routes>
-          <Route path="/" element={user ? <Navigate to="/app" /> : <LandingPage />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/app/*" element={user ? (
-            <Dashboard
-              onLogout={handleLogout}
-              messagesUsed={messagesUsed}
-              messagesLimit={messagesLimit}
-              lineLimit={lineLimit} // Pass lineLimit
-              resetTime={resetTime}
-              canSendMessage={canSendMessage}
-              incrementUsage={incrementUsage}
-              validateCodeLength={validateCodeLength}
-            />
-          ) : (
-            <Navigate to="/" />
-          )} />
-          {/* Add routes for success/cancel pages if not already there */}
-          <Route path="/success" element={<div>Payment Success!</div>} />
-          <Route path="/cancel" element={<div>Payment Cancelled.</div>} />
-        </Routes>
-      </Router>
-    </GoogleOAuthProvider>
-  );
-}
+      const handleLogout = () => {
+        logout();
+      };
 
-export default App;
+      // Show loading indicator or handle initial auth state
+      if (loading) {
+        return (
+          <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
+            <p>Loading application...</p>
+          </div>
+        );
+      }
+
+      return (
+        // Ensure GOOGLE_CLIENT_ID is not undefined or empty
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID || ''}>
+          <Router>
+            <Routes>
+              {/* Landing Page */}
+              <Route path="/" element={user ? <Navigate to="/app" /> : <LandingPage />} />
+
+              {/* Auth Callback Page (if needed for specific OAuth flows) */}
+              <Route path="/auth/callback" element={<AuthCallback />} />
+
+              {/* Dashboard (Protected Route) */}
+              <Route
+                path="/app"
+                element={
+                  user ? (
+                    <Dashboard
+                      onLogout={handleLogout}
+                      messagesUsed={messagesUsed}
+                      messageLimit={messageLimit}
+                      lineLimit={lineLimit}
+                      resetTime={resetTime}
+                      canSendMessage={canSendMessage}
+                      incrementUsage={incrementUsage}
+                      validateCodeLength={validateCodeLength}
+                    />
+                  ) : (
+                    <Navigate to="/" /> // Redirect to landing if not authenticated
+                  )
+                }
+              />
+              {/* Add other routes as needed */}
+            </Routes>
+          </Router>
+        </GoogleOAuthProvider>
+      );
+    }
+
+    export default App;
+    

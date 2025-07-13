@@ -104,3 +104,4 @@ export const useAuth = (): AuthContextType => {
 
   return { user, loading, login, logout, handleGoogleLogin };
 };
+
